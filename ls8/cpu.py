@@ -1,6 +1,7 @@
 """CPU functionality."""
 
 import sys
+import os.path 
 
 HLT = 0b00000001
 LDI = 0b10000010
@@ -26,37 +27,37 @@ class CPU:
 
     # Return value of address stored in RAM
     def ram_read(self, address):
-        return self.ram[address]
+        value = self.ram[address]
+        return value 
 
-    def load(self):
-        """
-        Load a program into memory.
-        For now, we've just hardcoded a program:
-
-        """
-        program = [
-            # From print8.ls8
-            0b10000010, # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111, # PRN R0
-            0b00000000,
-            0b00000001, # HLT
-        ]
-
+    def load(self, filename):
+        """Load a program into memory."""
         address = 0
 
-        for instruction in program:
-            self.ram[address] = instruction
-            address += 1
-
+        filepath = os.path.join(os.path.dirname(__file__), filename)
+        try:
+            with open(filepath) as f:
+                for line in f:
+                    str_value = line.split("#")[0].strip()
+                    try:
+                        instruction = int(str_value, 2)
+                        self.ram[address] = instruction
+                        address += 1
+                    except:
+                        continue
+        except:
+            print(f'Could not find file: {filename}')
+            sys.exit(1)
 
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
-        #elif op == "SUB": etc
+        elif op == "SUB":
+            self.reg[reg_a] -= self.reg[reg_b]
+        elif op == "MUL":
+            self.reg[reg_a] *= self.reg[reg_b]
         else:
             raise Exception("Unsupported ALU operation")
 
