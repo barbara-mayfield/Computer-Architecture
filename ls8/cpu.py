@@ -3,23 +3,37 @@
 import sys
 import os.path 
 
-HLT = 0b00000001
-LDI = 0b10000010
-PRN = 0b01000111
+HLT = 0b00000001 # HALT
+LDI = 0b10000010 # LOAD IMMEDIATE
+PRN = 0b01000111 # PRINT
+PUSH = 0b01000101
+POP  = 0b01000110
+CALL = 0b01010000 
+RET  = 0b00010001 # RETURN 
+ADD  = 0b10100000
+SUB = 0b10100001
 MULT = 0b10100010
-SP = 7
+DIV = 0b10100011
+PUSH = 0b01000101
+POP = 0b01000110
+CMP = 0b10100111
+JMP = 0b01010100
+JEQ = 0b01010101
+JNE = 0b01010110
 
 class CPU:
     """Main CPU class."""
 
     def __init__(self):
         """Construct a new CPU."""
-        # Set up memory
-        self.ram = [0] * 256
-        self.reg = [0] * 8
+        
+        self.ram = [0] * 256 # 256-byte RAM
+        self.reg = [0] * 8 # Our register 
         self.halted = False 
-        # Set up pc counter 
-        self.pc = 0
+        self.pc = 0 # Program counter, address of the current instruction
+        self.SP = 7 # Stack pointer
+        self.flag = 0b00000000
+
 
     # Store value in specific RAM address
     def ram_write(self, value, address):
@@ -33,6 +47,10 @@ class CPU:
     def load(self, filename):
         """Load a program into memory."""
         address = 0
+
+        if len(sys.argv) != 2:
+            print(f"Invalid Input")
+            print(f"Usage: ls8.py program_name")
 
         filepath = os.path.join(os.path.dirname(__file__), filename)
         try:
@@ -58,6 +76,17 @@ class CPU:
             self.reg[reg_a] -= self.reg[reg_b]
         elif op == "MUL":
             self.reg[reg_a] *= self.reg[reg_b]
+        elif op == "DIV":
+            self.reg[reg_a] /= self.reg[reg_b]
+        elif op == "CMP":
+            first = self.reg[reg_a]
+            second = self.reg[reg_b]
+            if first == second:
+                self.flag = 0b00000001
+            elif first < second:
+                self.flag = 0b00000100
+            elif first > second:
+                self.flag = 0b00000010
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -81,6 +110,15 @@ class CPU:
 
         print()
     
+    def push(self, value):
+        self.SP -= 1               
+        self.ram[self.SP] = value
+
+    def pop(self):    
+        value = self.ram[self.SP]
+        self.SP += 1
+        return value 
+    
     def execute(self, instruction, op_1, op_2):
         if instruction == HLT:
             self.halted = True
@@ -91,9 +129,54 @@ class CPU:
         elif instruction == LDI:
             self.reg[op_1] = op_2
             self.pc += 3
-        elif instruction == MULT:
-            self.reg[op_1] *= self.reg[op_2]
+        elif instruction == ADD:
+            self.alu("ADD", op_1, op_2)
             self.pc += 3
+        elif instruction == SUB:
+            self.alu("SUB", op_1, op_2)
+        elif instruction == MULT:
+            self.alu("MUL", op_1, op_2)
+            self.pc += 3
+        elif instruction == DIV:
+            self.alu("DIV", op_1, op_2)
+        elif instruction == PUSH:
+            # decrement stack pointer
+            self.SP -= 1
+            # write the val stored in reg onto stack
+            self.ram_write(self.reg[op_1], self.reg[self.SP])
+            self.pc += 2 
+        elif instruction == POP:
+            # save val on top of stack to given register
+            top_val = self.ram_read(self.reg[self.SP])
+            self.reg[op_1] = top_val 
+            self.reg[self.SP] += 1
+            self.pc += 2 
+        elif instruction == CALL:
+            return_addr = self.pc + 2
+            self.push(return_addr)
+
+            reg_num = self.ram[self.pc + 1]
+            sub_addr = self.reg[reg_num]
+
+            self.pc = sub_addr            
+        elif instruction == RET:
+            return_addr = self.pop()
+            self.pc = return_addr 
+        elif instruction == CMP:
+            self.alu("CMP", op_1, op_2)
+            self.pc += 3
+        elif instruction == JMP:
+            self.pc = self.reg[op_1]
+        elif instruction == JEQ:
+            if self.flag == 0b00000001:
+                self.pc = self.reg[op_1]
+            else:
+                self.pc += 2
+        elif instruction == JNE:
+            if self.flag != 0b00000001:
+                self.pc = self.reg[op_1]
+            else:
+                self.pc += 2 
         else:
             sys.exit(1)
 
